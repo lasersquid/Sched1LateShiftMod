@@ -1,0 +1,9 @@
+{
+    "name": "LateShift%%ARCH%%",
+    "version_number": "%%VERSION%%",
+    "website_url": "https://github.com/lasersquid/Sched1LateShiftMod",
+    "description": "Allows employees to work past 4AM and without an assigned bed or locker. Autopay employees and configure whether pay is deducted from cash or your bank account.",
+    "dependencies": [
+	"LavaGang-MelonLoader-0.7.0"
+    ]
+}

@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36203.30
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LateShift", "LateShift\LateShift.csproj", "{4022CCED-DA0E-40AD-9C7F-17B01FB4ECA9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		IL2CPP|Any CPU = IL2CPP|Any CPU
+		Mono|Any CPU = Mono|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4022CCED-DA0E-40AD-9C7F-17B01FB4ECA9}.IL2CPP|Any CPU.ActiveCfg = IL2CPP|Any CPU
+		{4022CCED-DA0E-40AD-9C7F-17B01FB4ECA9}.IL2CPP|Any CPU.Build.0 = IL2CPP|Any CPU
+		{4022CCED-DA0E-40AD-9C7F-17B01FB4ECA9}.Mono|Any CPU.ActiveCfg = Mono|Any CPU
+		{4022CCED-DA0E-40AD-9C7F-17B01FB4ECA9}.Mono|Any CPU.Build.0 = Mono|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8647B05D-B58E-41C2-BF40-BC71D50CBE7E}
+	EndGlobalSection
+EndGlobal
