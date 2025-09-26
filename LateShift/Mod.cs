@@ -5,7 +5,7 @@ using System.Reflection;
 
 
 
-[assembly: MelonInfo(typeof(LateShift.LateShiftMod), "LateShift", "1.0.0", "lasersquid", null)]
+[assembly: MelonInfo(typeof(LateShift.LateShiftMod), "LateShift", "1.0.1", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace LateShift
@@ -13,17 +13,12 @@ namespace LateShift
     public class LateShiftMod : MelonMod
     {
         private bool needsReset = false;
-
-        public LateShiftSettings settings;
-        public const string settingsFileName = "LateShiftSettings.json";
-        public string settingsFilePath = Path.Combine(MelonEnvironment.UserDataDirectory, settingsFileName);
-
+        public MelonPreferences_Category melonPrefs;
         public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.lateshift");
 
         public override void OnInitializeMelon()
         {
-            LoadSettings();
-            SaveSettings();
+            CreateMelonPreferences();
             SetMod();
             LoggerInstance.Msg("Initialized.");
         }
@@ -51,22 +46,16 @@ namespace LateShift
             needsReset = false;
         }
 
-        private void LoadSettings()
+        private void CreateMelonPreferences()
         {
-            LoggerInstance.Msg($"Loading settings from {settingsFilePath}");
-            settings = LateShiftSettings.LoadSettings(settingsFilePath);
-            if (LateShiftSettings.UpdateSettings(settings) || !File.Exists(settingsFilePath))
-            {
-                SaveSettings();
-            }
-        }
+            melonPrefs = MelonPreferences.CreateCategory("LateShift");
+            melonPrefs.SetFilePath("UserData/LateShift.cfg");
 
-        private void SaveSettings()
-        {
-            if (settings != null)
-            {
-                settings.SaveSettings(settingsFilePath);
-            }
+            melonPrefs.CreateEntry<bool>("employeesAlwaysWork", true, "Employees always work", "Employees keep working at 4am");
+            melonPrefs.CreateEntry<bool>("workWithoutBeds", true, "Employees work without beds", "Employees work without beds or lockers");
+            melonPrefs.CreateEntry<bool>("payEmployeesFromBank", false, "Autopay employees from bank account", "Autopay employees from bank account if true; otherwise pay with cash");
+
+            melonPrefs.SaveToFile();
         }
 
         private List<Type> GetPatchTypes()
@@ -102,101 +91,6 @@ namespace LateShift
                     LoggerInstance.Warning($"{e.StackTrace}");
                 }
             }
-        }
-
-    }
-
-    public class LateShiftSettings
-    {
-        public bool employeesAlwaysWork;
-        public bool employeesWorkWithoutBeds;
-        public bool payEmployeesWithCredit;
-
-        // version, for upgrading purposes
-        public const string CurrentVersion = "1.0.0";
-        public string version;
-        private static bool VersionGreaterThan(string version, string other)
-        {
-            // if other is null, empty string, or malformed, return true
-            if (other == null)
-            {
-                return true;
-            }
-
-            string[] versionStrings = version.Split(['.']);
-            int versionMajor = Convert.ToInt32(versionStrings[0]);
-            int versionMinor = Convert.ToInt32(versionStrings[1]);
-            int versionPatch = Convert.ToInt32(versionStrings[2]);
-
-            string[] otherStrings = other.Split(['.']);
-            int otherMajor = Convert.ToInt32(otherStrings[0]);
-            int otherMinor = Convert.ToInt32(otherStrings[1]);
-            int otherPatch = Convert.ToInt32(otherStrings[2]);
-
-            if (versionMajor > otherMajor)
-            {
-                return true;
-            }
-            else if (versionMajor == otherMajor && versionMinor > otherMinor)
-            {
-                return true;
-            }
-            else if (versionMajor == otherMajor && versionMinor == otherMinor && versionPatch > otherPatch)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-
-        }
-
-        // return true if settings were modified
-        public static bool UpdateSettings(LateShiftSettings settings)
-        {
-            bool changed = false;
-
-            return changed;
-        }
-
-
-        public static LateShiftSettings LoadSettings(string jsonPath)
-        {
-            if (File.Exists(jsonPath))
-            {
-                string json = File.ReadAllText(jsonPath);
-                LateShiftSettings fromFile = JsonConvert.DeserializeObject<LateShiftSettings>(json);
-
-                return fromFile;
-            }
-
-            return new LateShiftSettings();
-        }
-
-        public LateShiftSettings()
-        {
-            employeesAlwaysWork = true;
-            employeesWorkWithoutBeds = true;
-            payEmployeesWithCredit = false;
-
-            version = CurrentVersion;
-        }
-
-        public void SaveSettings(string jsonPath)
-        {
-            File.WriteAllText(jsonPath, this.ToString());
-        }
-
-        public override string ToString()
-        {
-            return JsonConvert.SerializeObject(this, Formatting.Indented);
-        }
-
-        public void PrintSettings()
-        {
-            MelonLogger.Msg("Settings:");
-            MelonLogger.Msg($"{this}");
         }
     }
 }

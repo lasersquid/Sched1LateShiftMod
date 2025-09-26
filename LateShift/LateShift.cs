@@ -26,7 +26,7 @@ namespace LateShift
 
     public class Sched1PatchesBase
     {
-        protected static MelonMod Mod;
+        protected static LateShiftMod Mod;
 
         public static object GetField(Type type, string fieldName, object target)
         {
@@ -61,7 +61,7 @@ namespace LateShift
             return AccessTools.Method(type, methodName).Invoke(target, args);
         }
 
-        public static void SetMod(MelonMod mod)
+        public static void SetMod(LateShiftMod mod)
         {
             Mod = mod;
         }
@@ -139,9 +139,9 @@ namespace LateShift
         public static bool IsPayAvailablePrefix(Employee __instance, ref bool __result)
         {
             MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
-            if ((Mod as LateShiftMod).settings.employeesWorkWithoutBeds)
+            if (Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
             {
-                if ((Mod as LateShiftMod).settings.payEmployeesWithCredit)
+                if (Mod.melonPrefs.GetEntry<bool>("payEmployeesFromBank").Value)
                 {
                     __result = moneyManager.onlineBalance >= __instance.DailyWage;
                     return false;
@@ -170,9 +170,9 @@ namespace LateShift
         public static bool RemoveDailyWagePrefix(Employee __instance)
         {
             MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
-            if ((Mod as LateShiftMod).settings.employeesWorkWithoutBeds)
+            if (Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
             {
-                if ((Mod as LateShiftMod).settings.payEmployeesWithCredit)
+                if (Mod.melonPrefs.GetEntry<bool>("payEmployeesWithCredit").Value)
                 {
                     if (moneyManager.onlineBalance >= __instance.DailyWage)
                     {
@@ -207,7 +207,7 @@ namespace LateShift
         [HarmonyPrefix]
         public static bool GetWorkIssuePrefix(Employee __instance, ref bool __result, ref DialogueContainer notWorkingReason)
         {
-            if (__instance.GetHome() == null && !(Mod as LateShiftMod).settings.employeesWorkWithoutBeds)
+            if (__instance.GetHome() == null && !Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
             {
                 notWorkingReason = __instance.BedNotAssignedDialogue;
                 __result = true;
@@ -250,9 +250,9 @@ namespace LateShift
         [HarmonyPrefix]
         public static bool CanWorkPrefix(Employee __instance, ref bool __result)
         {
-            __result = ((__instance.GetHome() != null) || (Mod as LateShiftMod).settings.employeesWorkWithoutBeds) &&
-                (!NetworkSingleton<TimeManager>.Instance.IsEndOfDay || (Mod as LateShiftMod).settings.employeesAlwaysWork) &&
-                __instance.PaidForToday;
+            __result = ((__instance.GetHome() != null) || Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value &&
+                (!NetworkSingleton<TimeManager>.Instance.IsEndOfDay || Mod.melonPrefs.GetEntry<bool>("employeesAlwaysWork").Value) &&
+                __instance.PaidForToday);
 
             return false;
         }
@@ -269,12 +269,12 @@ namespace LateShift
             {
                 bool flag = false;
                 bool flag2 = false;
-                if (__instance.GetHome() == null && !(Mod as LateShiftMod).settings.employeesWorkWithoutBeds)
+                if (__instance.GetHome() == null && !Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
                 {
                     flag = true;
                     __instance.SubmitNoWorkReason("I haven't been assigned a locker", "You can use your management clipboard to assign me a locker.", 0);
                 }
-                else if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !(Mod as LateShiftMod).settings.employeesAlwaysWork)
+                else if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Mod.melonPrefs.GetEntry<bool>("employeesAlwaysWork").Value)
                 {
                     flag = true;
                     __instance.SubmitNoWorkReason("Sorry boss, my shift ends at 4AM.", string.Empty, 0);
