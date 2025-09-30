@@ -172,7 +172,7 @@ namespace LateShift
             MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
             if (Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
             {
-                if (Mod.melonPrefs.GetEntry<bool>("payEmployeesWithCredit").Value)
+                if (Mod.melonPrefs.GetEntry<bool>("payEmployeesFromBank").Value)
                 {
                     if (moneyManager.onlineBalance >= __instance.DailyWage)
                     {
