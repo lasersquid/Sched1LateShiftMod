@@ -5,7 +5,7 @@ using System.Reflection;
 
 
 
-[assembly: MelonInfo(typeof(LateShift.LateShiftMod), "LateShift", "1.0.1", "lasersquid", null)]
+[assembly: MelonInfo(typeof(LateShift.LateShiftMod), "LateShift", "1.0.3", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace LateShift

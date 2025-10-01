@@ -172,7 +172,7 @@ namespace LateShift
             MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
             if (Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
             {
-                if (Mod.melonPrefs.GetEntry<bool>("payEmployeesWithCredit").Value)
+                if (Mod.melonPrefs.GetEntry<bool>("payEmployeesFromBank").Value)
                 {
                     if (moneyManager.onlineBalance >= __instance.DailyWage)
                     {
@@ -250,9 +250,9 @@ namespace LateShift
         [HarmonyPrefix]
         public static bool CanWorkPrefix(Employee __instance, ref bool __result)
         {
-            __result = ((__instance.GetHome() != null) || Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value &&
+            __result = ((__instance.GetHome() != null) || Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value) &&
                 (!NetworkSingleton<TimeManager>.Instance.IsEndOfDay || Mod.melonPrefs.GetEntry<bool>("employeesAlwaysWork").Value) &&
-                __instance.PaidForToday);
+                __instance.PaidForToday;
 
             return false;
         }
