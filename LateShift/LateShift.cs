@@ -18,6 +18,10 @@ using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.GameTime;
+using Il2CppScheduleOne.Property;
+using Il2CppScheduleOne.ItemFramework;
+using Il2CppScheduleOne.Management;
+using Il2CppScheduleOne.ObjectScripts;
 #endif
 
 
@@ -176,12 +180,12 @@ namespace LateShift
                 {
                     if (moneyManager.onlineBalance >= __instance.DailyWage)
                     {
-                        moneyManager.CreateOnlineTransaction("Employee Pay", __instance.DailyWage, 1f, $"{__instance.fullName}, employeetype, location");
+                        // Record employee pay as a debit from the online balance.
+                        moneyManager.CreateOnlineTransaction("Employee Pay", -__instance.DailyWage, 1f, $"{__instance.fullName}, employeetype, location");
                     }
                 }
                 else
                 {
-
                     if (moneyManager.cashBalance >= __instance.DailyWage)
                     {
                         moneyManager.ChangeCashBalance(-__instance.DailyWage);
@@ -247,38 +251,62 @@ namespace LateShift
         }
 
         [HarmonyPatch(typeof(Employee), "CanWork")]
-        [HarmonyPrefix]
-        public static bool CanWorkPrefix(Employee __instance, ref bool __result)
+        [HarmonyPostfix]
+        public static void CanWorkPostfix(Employee __instance, ref bool __result)
         {
-            __result = ((__instance.GetHome() != null) || Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value) &&
-                (!NetworkSingleton<TimeManager>.Instance.IsEndOfDay || Mod.melonPrefs.GetEntry<bool>("employeesAlwaysWork").Value) &&
-                __instance.PaidForToday;
+            bool hasHome = __instance.GetHome() != null;
+            bool paidForToday = __instance.PaidForToday;
+            bool isEndOfDay = NetworkSingleton<TimeManager>.Instance.IsEndOfDay;
+            bool workWithoutBeds = Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value;
+            bool employeesAlwaysWork = Mod.melonPrefs.GetEntry<bool>("employeesAlwaysWork").Value;
 
-            return false;
+            // Relax bed/locker requirement when enabled
+            if (!__result && !hasHome && paidForToday && !isEndOfDay && workWithoutBeds)
+            {
+                __result = true;
+            }
+
+            // Relax 4AM cutoff when enabled (has home)
+            if (!__result && hasHome && paidForToday && isEndOfDay && employeesAlwaysWork)
+            {
+                __result = true;
+            }
+
+            // Relax both for bedless workers at end-of-day when both prefs allow it
+            if (!__result && !hasHome && paidForToday && isEndOfDay && workWithoutBeds && employeesAlwaysWork)
+            {
+                __result = true;
+            }
         }
 
         [HarmonyPatch(typeof(Employee), "UpdateBehaviour")]
         [HarmonyPrefix]
         public static bool UpdateBehaviourPrefix(Employee __instance)
         {
-            if (__instance.Fired)
+            bool hasHome = __instance.GetHome() != null;
+            bool workWithoutBeds = Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value;
+            bool employeesAlwaysWork = Mod.melonPrefs.GetEntry<bool>("employeesAlwaysWork").Value;
+            bool isEndOfDay = NetworkSingleton<TimeManager>.Instance.IsEndOfDay;
+
+            // Only intercept the "no home but beds are optional" case;
+            // otherwise let vanilla UpdateBehaviour run unchanged.
+            if (!hasHome && workWithoutBeds)
             {
-                return false;
-            }
-            if (__instance.Behaviour.activeBehaviour == null || __instance.Behaviour.activeBehaviour == __instance.WaitOutside)
-            {
+                if (__instance.Fired)
+                {
+                    return false;
+                }
+
                 bool flag = false;
                 bool flag2 = false;
-                if (__instance.GetHome() == null && !Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
-                {
-                    flag = true;
-                    __instance.SubmitNoWorkReason("I haven't been assigned a locker", "You can use your management clipboard to assign me a locker.", 0);
-                }
-                else if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Mod.melonPrefs.GetEntry<bool>("employeesAlwaysWork").Value)
+
+                // End-of-day handling, unless "always work" is enabled.
+                if (isEndOfDay && !employeesAlwaysWork)
                 {
                     flag = true;
                     __instance.SubmitNoWorkReason("Sorry boss, my shift ends at 4AM.", string.Empty, 0);
                 }
+                // Pay handling, even without a home (uses our IsPayAvailable/RemoveDailyWage patches).
                 else if (!__instance.PaidForToday)
                 {
                     if (__instance.IsPayAvailable())
@@ -291,19 +319,248 @@ namespace LateShift
                         __instance.SubmitNoWorkReason("I haven't been paid yet", "You can place cash in my locker.", 0);
                     }
                 }
+
                 if (flag)
                 {
-                    CallMethod(typeof(Employee), "SetWaitOutside", __instance, [true]);
+                    CallMethod(typeof(Employee), "SetWaitOutside", __instance, new object[] { true });
                     return false;
                 }
+
                 if (InstanceFinder.IsServer && flag2 && __instance.IsPayAvailable())
                 {
                     __instance.RemoveDailyWage();
                     __instance.SetIsPaid();
                 }
+
+                // Skip vanilla here; it would otherwise reintroduce the "must have home" restriction.
+                return false;
             }
-            return false;
+
+            // For all other cases, allow vanilla UpdateBehaviour to run.
+            return true;
         }
+
+#if !MONO_BUILD
+        // IL2CPP-only helper: when handlers/packagers are homeless but allowed
+        // to work (workWithoutBeds = true), the IL2CPP backend sometimes fails
+        // to schedule new tasks even though CanWork() is true. This postfix
+        // mirrors the vanilla station/press selection chain for homeless
+        // handlers on the server and starts work if something is ready,
+        // using strongly-typed calls instead of reflection.
+        [HarmonyPatch(typeof(Packager), "UpdateBehaviour")]
+        [HarmonyPostfix]
+        public static void PackagerUpdateBehaviourPostfix(Packager __instance)
+        {
+            bool workWithoutBeds = Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value;
+            bool hasHome = __instance.GetHome() != null;
+
+            if (!workWithoutBeds || hasHome)
+            {
+                return;
+            }
+
+            // Only the server should schedule work.
+            if (!InstanceFinder.IsServer)
+            {
+                return;
+            }
+
+            // Respect current behaviours; don't interfere if already busy.
+            if ((__instance.PackagingBehaviour != null && __instance.PackagingBehaviour.Active) ||
+                (__instance.MoveItemBehaviour != null && __instance.MoveItemBehaviour.Active))
+            {
+                return;
+            }
+
+            // Only try to help if the game thinks this handler can work.
+            if (!__instance.PaidForToday)
+            {
+                return;
+            }
+
+            // Access the packager configuration in a strongly-typed way.
+            var configBase = __instance.Configuration;
+            var config = configBase.TryCast<PackagerConfiguration>();
+            if (config == null)
+            {
+                return;
+            }
+
+            // 1) Try to start packaging at an assigned packaging station.
+            if (__instance.PackagingBehaviour != null)
+            {
+                foreach (var station in config.AssignedStations)
+                {
+                    if (station == null)
+                    {
+                        continue;
+                    }
+
+                    if (__instance.PackagingBehaviour.IsStationReady(station))
+                    {
+                        __instance.PackagingBehaviour.AssignStation(station);
+                        __instance.PackagingBehaviour.Enable_Networked();
+                        return;
+                    }
+                }
+            }
+
+            // 2) Try to start pressing bricks at an assigned press.
+            if (__instance.BrickPressBehaviour != null)
+            {
+                foreach (var press in config.AssignedBrickPresses)
+                {
+                    if (press == null)
+                    {
+                        continue;
+                    }
+
+                    if (__instance.BrickPressBehaviour.IsStationReady(press))
+                    {
+                        __instance.BrickPressBehaviour.AssignStation(press);
+                        __instance.BrickPressBehaviour.Enable_Networked();
+                        return;
+                    }
+                }
+            }
+
+            // 3) Try to move items from packaging stations.
+            if (__instance.MoveItemBehaviour != null)
+            {
+                foreach (var station in config.AssignedStations)
+                {
+                    if (station == null)
+                    {
+                        continue;
+                    }
+
+                    ItemSlot outputSlot = station.OutputSlot;
+                    if (outputSlot == null || outputSlot.Quantity == 0)
+                    {
+                        continue;
+                    }
+
+                    var stationConfig = station.Configuration.TryCast<PackagingStationConfiguration>();
+                    if (stationConfig == null)
+                    {
+                        continue;
+                    }
+
+                    var destRoute = stationConfig.DestinationRoute;
+                    if (destRoute == null || outputSlot.ItemInstance == null)
+                    {
+                        continue;
+                    }
+
+                    if (!__instance.MoveItemBehaviour.IsTransitRouteValid(destRoute, outputSlot.ItemInstance.ID))
+                    {
+                        continue;
+                    }
+
+                    __instance.MoveItemBehaviour.Initialize(destRoute, outputSlot.ItemInstance, -1, false);
+                    __instance.MoveItemBehaviour.Enable_Networked();
+                    return;
+                }
+
+                // 4) Try to move items from brick presses.
+                foreach (var press in config.AssignedBrickPresses)
+                {
+                    if (press == null)
+                    {
+                        continue;
+                    }
+
+                    ItemSlot outputSlot = press.OutputSlot;
+                    if (outputSlot == null || outputSlot.Quantity == 0)
+                    {
+                        continue;
+                    }
+
+                    var pressConfig = press.Configuration.TryCast<BrickPressConfiguration>();
+                    if (pressConfig == null)
+                    {
+                        continue;
+                    }
+
+                    var destRoute = pressConfig.DestinationRoute;
+                    if (destRoute == null || outputSlot.ItemInstance == null)
+                    {
+                        continue;
+                    }
+
+                    if (!__instance.MoveItemBehaviour.IsTransitRouteValid(destRoute, outputSlot.ItemInstance.ID))
+                    {
+                        continue;
+                    }
+
+                    __instance.MoveItemBehaviour.Initialize(destRoute, outputSlot.ItemInstance, -1, false);
+                    __instance.MoveItemBehaviour.Enable_Networked();
+                    return;
+                }
+
+                // 5) Try to move items via advanced transit routes (shelves -> stations/presses).
+                if (config.Routes != null && config.Routes.Routes != null)
+                {
+                    foreach (AdvancedTransitRoute route in config.Routes.Routes)
+                    {
+                        if (route == null)
+                        {
+                            continue;
+                        }
+
+                        ItemInstance item = route.GetItemReadyToMove();
+                        if (item == null)
+                        {
+                            continue;
+                        }
+
+                        bool canSource = false;
+                        bool canDestination = false;
+                        int capacity = 0;
+
+                        try
+                        {
+                            canSource = __instance.Movement != null && __instance.Movement.CanGetTo(route.Source, 1f);
+                            canDestination = __instance.Movement != null && __instance.Movement.CanGetTo(route.Destination, 1f);
+                            capacity = __instance.Inventory != null ? __instance.Inventory.GetCapacityForItem(item) : 0;
+                        }
+                        catch
+                        {
+                            // If movement or inventory checks throw, skip this route.
+                            continue;
+                        }
+
+                        if (!canSource || !canDestination || capacity <= 0)
+                        {
+                            continue;
+                        }
+
+                        __instance.MoveItemBehaviour.Initialize(route, item, item.Quantity, false);
+                        __instance.MoveItemBehaviour.Enable_Networked();
+                        return;
+                    }
+                }
+            }
+
+            // If we reach this point, no work was started in this tick for a
+            // homeless handler. Mirror vanilla's "nothing to do" behaviour by
+            // explicitly idling so they return to their idle point instead of
+            // freezing at the last task location.
+            if ((__instance.PackagingBehaviour == null || !__instance.PackagingBehaviour.Active) &&
+                (__instance.MoveItemBehaviour == null || !__instance.MoveItemBehaviour.Active) &&
+                !__instance.Fired)
+            {
+                try
+                {
+                    CallMethod(typeof(Employee), "SetIdle", __instance, new object[] { true });
+                }
+                catch
+                {
+                    // Best-effort; failures here should not break work logic.
+                }
+            }
+        }
+#endif
 
 
         public static new void RestoreDefaults()
