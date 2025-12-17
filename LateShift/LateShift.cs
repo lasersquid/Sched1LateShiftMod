@@ -2,13 +2,17 @@
 using MelonLoader;
 using UnityEngine.Events;
 
+
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Dialogue;
 using ScheduleOne.Employees;
-using ScheduleOne.Money;
 using ScheduleOne.GameTime;
+using ScheduleOne.ItemFramework;
+using ScheduleOne.Management;
+using ScheduleOne.Money;
+using ScheduleOne.ObjectScripts;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime;
@@ -16,8 +20,11 @@ using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.Employees;
-using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.GameTime;
+using Il2CppScheduleOne.ItemFramework;
+using Il2CppScheduleOne.Management;
+using Il2CppScheduleOne.Money;
+using Il2CppScheduleOne.ObjectScripts;
 #endif
 
 
@@ -302,6 +309,82 @@ namespace LateShift
                     __instance.SetIsPaid();
                 }
             }
+            return false;
+        }
+
+        // CanWork is probably inlined. Replace with original method body.
+        [HarmonyPatch(typeof(Packager), "UpdateBehaviour")]
+        [HarmonyPrefix]
+        public static bool PackagerUpdateBehaviourPrefix(Packager __instance)
+        {
+            UpdateBehaviourPrefix(__instance);
+            if (__instance.PackagingBehaviour.Active)
+            {
+                CallMethod(typeof(Packager), "MarkIsWorking", __instance, []);
+                return false;
+            }
+            if (__instance.MoveItemBehaviour.Active)
+            {
+                CallMethod(typeof(Packager), "MarkIsWorking", __instance, []);
+                return false;
+            }
+            if (__instance.Fired)
+            {
+                CallMethod(typeof(Packager), "LeavePropertyAndDespawn", __instance, []);
+                return false;
+            }
+            // This was probably inlined
+            if (!(bool)CallMethod(typeof(Packager), "CanWork", __instance, []))
+            {
+                return false;
+            }
+            PackagerConfiguration configuration = (PackagerConfiguration)GetProperty(typeof(Packager), "configuration", __instance);
+            if (configuration.AssignedStationCount +  configuration.Routes.Routes.Count == 0)
+            {
+                __instance.SubmitNoWorkReason("I haven't been assigned to any stations or routes.", "You can use your management clipboards to assign stations or routes to me.", 0);
+                __instance.SetIdle(true);
+                return false;
+            }
+            if (!InstanceFinder.IsServer)
+            {
+                return false;
+            }
+            PackagingStation stationToAttend = (PackagingStation)CallMethod(typeof(Packager), "GetStationToAttend", __instance, []);
+            if (stationToAttend != null)
+            {
+                CallMethod(typeof(Packager), "StartPackaging", __instance, [stationToAttend]);
+                return false;
+            }
+            BrickPress brickPress = (BrickPress)CallMethod(typeof(Packager), "GetBrickPress", __instance, []);
+            if (brickPress != null)
+            {
+                CallMethod(typeof(Packager), "StartPress", __instance, [brickPress]);
+                return false;
+            }
+            PackagingStation stationMoveItems = (PackagingStation)CallMethod(typeof(Packager), "GetStationMoveItems", __instance, []);
+            if (stationMoveItems != null)
+            {
+                CallMethod(typeof(Packager), "StartMoveItem", __instance, [stationMoveItems]);
+                return false;
+            }
+            BrickPress brickPressMoveItems = (BrickPress)CallMethod(typeof(Packager), "GetBrickPressMoveItems", __instance, []);
+            if (brickPressMoveItems != null)
+            {
+                CallMethod(typeof(Packager), "StartMoveItem", __instance, [brickPressMoveItems]);
+                return false;
+            }
+            ItemInstance itemInstance = null;
+            object[] args = new object[1] { itemInstance };
+            AdvancedTransitRoute transitRouteReady = (AdvancedTransitRoute)CallMethod(typeof(Packager), "GetTransitRouteReady", __instance, args);
+            itemInstance = (ItemInstance)args[0];
+            if (transitRouteReady != null)
+            {
+                __instance.MoveItemBehaviour.Initialize(transitRouteReady, itemInstance, itemInstance.Quantity, false);
+                __instance.MoveItemBehaviour.Enable_Networked();
+                return false;
+            }
+            __instance.SubmitNoWorkReason("There's nothing for me to do right now.", "I need one of my assigned stations to have enough product and packaging to get to work.", 0);
+            __instance.SetIdle(true);
             return false;
         }
 
