@@ -30,10 +30,64 @@ using Il2CppScheduleOne.ObjectScripts;
 
 namespace LateShift
 {
-
-    public class Sched1PatchesBase
+    public static class Utils
     {
-        protected static LateShiftMod Mod;
+        private static MelonMod Mod;
+
+        public static void SetMod(MelonMod mod)
+        {
+            Mod = mod;
+        }
+
+        public static void PrintException(Exception e)
+        {
+            Utils.Warn($"Exception: {e.GetType().Name} - {e.Message}");
+            Utils.Warn($"Source: {e.Source}");
+            Utils.Warn($"{e.StackTrace}");
+            if (e.InnerException != null)
+            {
+                Utils.Warn($"Inner exception: {e.InnerException.GetType().Name} - {e.InnerException.Message}");
+                Utils.Warn($"Source: {e.InnerException.Source}");
+                Utils.Warn($"{e.InnerException.StackTrace}");
+                if (e.InnerException.InnerException != null)
+                {
+                    Utils.Warn($"Inner inner exception: {e.InnerException.InnerException.GetType().Name} - {e.InnerException.InnerException.Message}");
+                    Utils.Warn($"Source: {e.InnerException.InnerException.Source}");
+                    Utils.Warn($"{e.InnerException.InnerException.StackTrace}");
+                }
+            }
+        }
+
+        public static void Log(string message)
+        {
+            Mod.LoggerInstance.Msg(message);
+        }
+
+        public static void Warn(string message)
+        {
+            Mod.LoggerInstance.Warning(message);
+        }
+
+        public static void Debug(string message)
+        {
+            if (Utils.GetMelonPrefs().GetEntry<bool>("debugLogs").Value)
+            {
+                Mod.LoggerInstance.Msg($"DEBUG: {message}");
+            }
+        }
+
+        public static void VerboseLog(string message)
+        {
+            if (Utils.GetMelonPrefs().GetEntry<bool>("verboseLogs").Value)
+            {
+                Mod.LoggerInstance.Msg(message);
+            }
+        }
+
+        public static MelonPreferences_Category GetMelonPrefs()
+        {
+            return ((LateShiftMod)Mod).melonPrefs;
+        }
 
         public static object GetField(Type type, string fieldName, object target)
         {
@@ -68,9 +122,9 @@ namespace LateShift
             return AccessTools.Method(type, methodName).Invoke(target, args);
         }
 
-        public static void SetMod(LateShiftMod mod)
+        public static object CallMethod(Type type, string methodName, Type[] argTypes, object target, object[] args)
         {
-            Mod = mod;
+            return AccessTools.Method(type, methodName, argTypes).Invoke(target, args);
         }
 
         public static T CastTo<T>(object o) where T : class
@@ -119,36 +173,19 @@ namespace LateShift
             return DelegateSupport.ConvertDelegate<UnityAction<T>>(action);
 #endif
         }
-
-        public static void Log(string message)
-        {
-            Mod.LoggerInstance.Msg(message);
-        }
-
-        public static void Warn(string message)
-        {
-            Mod.LoggerInstance.Warning(message);
-        }
-
-        public static void RestoreDefaults()
-        {
-            throw new NotImplementedException();
-        }
     }
 
-
     [HarmonyPatch]
-    public class NoBedsPatches : Sched1PatchesBase
+    public class NoBedsPatches
     {
-
         [HarmonyPatch(typeof(Employee), "IsPayAvailable")]
         [HarmonyPrefix]
         public static bool IsPayAvailablePrefix(Employee __instance, ref bool __result)
         {
             MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
-            if (Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
+            if (Utils.GetMelonPrefs().GetEntry<bool>("workWithoutBeds").Value)
             {
-                if (Mod.melonPrefs.GetEntry<bool>("payEmployeesFromBank").Value)
+                if (Utils.GetMelonPrefs().GetEntry<bool>("payEmployeesFromBank").Value)
                 {
                     __result = moneyManager.onlineBalance >= __instance.DailyWage;
                     return false;
@@ -177,9 +214,9 @@ namespace LateShift
         public static bool RemoveDailyWagePrefix(Employee __instance)
         {
             MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
-            if (Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
+            if (Utils.GetMelonPrefs().GetEntry<bool>("workWithoutBeds").Value)
             {
-                if (Mod.melonPrefs.GetEntry<bool>("payEmployeesFromBank").Value)
+                if (Utils.GetMelonPrefs().GetEntry<bool>("payEmployeesFromBank").Value)
                 {
                     if (moneyManager.onlineBalance >= __instance.DailyWage)
                     {
@@ -214,7 +251,7 @@ namespace LateShift
         [HarmonyPrefix]
         public static bool GetWorkIssuePrefix(Employee __instance, ref bool __result, ref DialogueContainer notWorkingReason)
         {
-            if (__instance.GetHome() == null && !Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
+            if (__instance.GetHome() == null && !Utils.GetMelonPrefs().GetEntry<bool>("workWithoutBeds").Value)
             {
                 notWorkingReason = __instance.BedNotAssignedDialogue;
                 __result = true;
@@ -228,9 +265,9 @@ namespace LateShift
                 return false;
             }
 #if MONO_BUILD
-            var workIssues = CastTo<List<Employee.NoWorkReason>>(GetField(typeof(Employee), "WorkIssues", __instance));
+            var workIssues = Utils.CastTo<List<Employee.NoWorkReason>>(Utils.GetField(typeof(Employee), "WorkIssues", __instance));
 #else
-            var workIssues = CastTo<Il2CppSystem.Collections.Generic.List<Employee.NoWorkReason>>(GetField(typeof(Employee), "WorkIssues", __instance));
+            var workIssues = Utils.CastTo<Il2CppSystem.Collections.Generic.List<Employee.NoWorkReason>>(Utils.GetField(typeof(Employee), "WorkIssues", __instance));
 #endif
             if (__instance.TimeSinceLastWorked >= 5 && workIssues.Count > 0)
             {
@@ -257,8 +294,8 @@ namespace LateShift
         [HarmonyPrefix]
         public static bool CanWorkPrefix(Employee __instance, ref bool __result)
         {
-            __result = ((__instance.GetHome() != null) || Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value) &&
-                (!NetworkSingleton<TimeManager>.Instance.IsEndOfDay || Mod.melonPrefs.GetEntry<bool>("employeesAlwaysWork").Value) &&
+            __result = ((__instance.GetHome() != null) || Utils.GetMelonPrefs().GetEntry<bool>("workWithoutBeds").Value) &&
+                (!NetworkSingleton<TimeManager>.Instance.IsEndOfDay || Utils.GetMelonPrefs().GetEntry<bool>("employeesAlwaysWork").Value) &&
                 __instance.PaidForToday;
 
             return false;
@@ -276,12 +313,12 @@ namespace LateShift
             {
                 bool flag = false;
                 bool flag2 = false;
-                if (__instance.GetHome() == null && !Mod.melonPrefs.GetEntry<bool>("workWithoutBeds").Value)
+                if (__instance.GetHome() == null && !Utils.GetMelonPrefs().GetEntry<bool>("workWithoutBeds").Value)
                 {
                     flag = true;
                     __instance.SubmitNoWorkReason("I haven't been assigned a locker", "You can use your management clipboard to assign me a locker.", 0);
                 }
-                else if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Mod.melonPrefs.GetEntry<bool>("employeesAlwaysWork").Value)
+                else if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Utils.GetMelonPrefs().GetEntry<bool>("employeesAlwaysWork").Value)
                 {
                     flag = true;
                     __instance.SubmitNoWorkReason("Sorry boss, my shift ends at 4AM.", string.Empty, 0);
@@ -300,7 +337,7 @@ namespace LateShift
                 }
                 if (flag)
                 {
-                    CallMethod(typeof(Employee), "SetWaitOutside", __instance, [true]);
+                    Utils.CallMethod(typeof(Employee), "SetWaitOutside", __instance, [true]);
                     return false;
                 }
                 if (InstanceFinder.IsServer && flag2 && __instance.IsPayAvailable())
@@ -320,25 +357,25 @@ namespace LateShift
             UpdateBehaviourPrefix(__instance);
             if (__instance.PackagingBehaviour.Active)
             {
-                CallMethod(typeof(Packager), "MarkIsWorking", __instance, []);
+                Utils.CallMethod(typeof(Packager), "MarkIsWorking", __instance, []);
                 return false;
             }
             if (__instance.MoveItemBehaviour.Active)
             {
-                CallMethod(typeof(Packager), "MarkIsWorking", __instance, []);
+                Utils.CallMethod(typeof(Packager), "MarkIsWorking", __instance, []);
                 return false;
             }
             if (__instance.Fired)
             {
-                CallMethod(typeof(Packager), "LeavePropertyAndDespawn", __instance, []);
+                Utils.CallMethod(typeof(Packager), "LeavePropertyAndDespawn", __instance, []);
                 return false;
             }
             // This was probably inlined
-            if (!(bool)CallMethod(typeof(Packager), "CanWork", __instance, []))
+            if (!(bool)Utils.CallMethod(typeof(Packager), "CanWork", __instance, []))
             {
                 return false;
             }
-            PackagerConfiguration configuration = (PackagerConfiguration)GetProperty(typeof(Packager), "configuration", __instance);
+            PackagerConfiguration configuration = (PackagerConfiguration)Utils.GetProperty(typeof(Packager), "configuration", __instance);
             if (configuration.AssignedStationCount +  configuration.Routes.Routes.Count == 0)
             {
                 __instance.SubmitNoWorkReason("I haven't been assigned to any stations or routes.", "You can use your management clipboards to assign stations or routes to me.", 0);
@@ -349,33 +386,36 @@ namespace LateShift
             {
                 return false;
             }
-            PackagingStation stationToAttend = (PackagingStation)CallMethod(typeof(Packager), "GetStationToAttend", __instance, []);
+            PackagingStation stationToAttend = (PackagingStation)Utils.CallMethod(typeof(Packager), "GetStationToAttend", __instance, []);
             if (stationToAttend != null)
             {
-                CallMethod(typeof(Packager), "StartPackaging", __instance, [stationToAttend]);
+                Utils.CallMethod(typeof(Packager), "StartPackaging", __instance, [stationToAttend]);
                 return false;
             }
-            BrickPress brickPress = (BrickPress)CallMethod(typeof(Packager), "GetBrickPress", __instance, []);
+            BrickPress brickPress = (BrickPress)Utils.CallMethod(typeof(Packager), "GetBrickPress", __instance, []);
             if (brickPress != null)
             {
-                CallMethod(typeof(Packager), "StartPress", __instance, [brickPress]);
+                Utils.CallMethod(typeof(Packager), "StartPress", __instance, [brickPress]);
                 return false;
             }
-            PackagingStation stationMoveItems = (PackagingStation)CallMethod(typeof(Packager), "GetStationMoveItems", __instance, []);
+            PackagingStation stationMoveItems = (PackagingStation)Utils.CallMethod(typeof(Packager), "GetStationMoveItems", __instance, []);
             if (stationMoveItems != null)
             {
-                CallMethod(typeof(Packager), "StartMoveItem", __instance, [stationMoveItems]);
+                Utils.CallMethod(typeof(Packager), "StartMoveItem", [typeof(PackagingStation)], __instance, [stationMoveItems]);
                 return false;
             }
-            BrickPress brickPressMoveItems = (BrickPress)CallMethod(typeof(Packager), "GetBrickPressMoveItems", __instance, []);
+            BrickPress brickPressMoveItems = (BrickPress)Utils.CallMethod(typeof(Packager), "GetBrickPressMoveItems", __instance, []);
             if (brickPressMoveItems != null)
             {
-                CallMethod(typeof(Packager), "StartMoveItem", __instance, [brickPressMoveItems]);
+                Utils.CallMethod(typeof(Packager), "StartMoveItem", [typeof(BrickPress)], __instance, [brickPressMoveItems]);
                 return false;
             }
+
+            // GetTransitRouteReady uses an out parameter. Changes to out parameters are captured in
+            // the args array, so keep a handle to it and copy the value back out after.
             ItemInstance itemInstance = null;
             object[] args = new object[1] { itemInstance };
-            AdvancedTransitRoute transitRouteReady = (AdvancedTransitRoute)CallMethod(typeof(Packager), "GetTransitRouteReady", __instance, args);
+            AdvancedTransitRoute transitRouteReady = (AdvancedTransitRoute)Utils.CallMethod(typeof(Packager), "GetTransitRouteReady", __instance, args);
             itemInstance = (ItemInstance)args[0];
             if (transitRouteReady != null)
             {
@@ -386,12 +426,6 @@ namespace LateShift
             __instance.SubmitNoWorkReason("There's nothing for me to do right now.", "I need one of my assigned stations to have enough product and packaging to get to work.", 0);
             __instance.SetIdle(true);
             return false;
-        }
-
-
-        public static new void RestoreDefaults()
-        {
-            // empty
         }
     }
 }

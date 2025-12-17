@@ -4,7 +4,7 @@ using System.Reflection;
 
 
 
-[assembly: MelonInfo(typeof(LateShift.LateShiftMod), "LateShift", "1.0.4", "lasersquid", null)]
+[assembly: MelonInfo(typeof(LateShift.LateShiftMod), "LateShift", "1.0.5", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace LateShift
@@ -18,7 +18,7 @@ namespace LateShift
         public override void OnInitializeMelon()
         {
             CreateMelonPreferences();
-            SetMod();
+            Utils.SetMod(this);
             LoggerInstance.Msg("Initialized.");
         }
 
@@ -63,15 +63,6 @@ namespace LateShift
                 .GetTypes()
                 .Where(t => t.Name.EndsWith("Patches"))
                 .ToList<Type>();
-        }
-
-        private void SetMod()
-        {
-            foreach (var t in GetPatchTypes())
-            {
-                MethodInfo method = t.GetMethod("SetMod", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-                method.Invoke(null, [this]);
-            }
         }
 
         public void RestoreDefaults()
