@@ -445,6 +445,11 @@ namespace LateShift
                         __instance.SubmitNoWorkReason("I haven't been paid yet", "You can place cash in my locker.", 0);
                     }
                 }
+                else if (!shouldNotWork && __instance.Behaviour.activeBehaviour == __instance.WaitOutside && !__instance.WaitOutside.Active)
+                {
+                    Utils.Warn($"Active behaviour is waitoutside, but it's disabled. enabling.");
+                    Utils.CallMethod<Employee>("SetWaitOutside", __instance, [true]);
+                }
                 if (shouldNotWork)
                 {
                     Utils.CallMethod<Employee>("SetWaitOutside", __instance, [true]);
@@ -460,7 +465,7 @@ namespace LateShift
             return false;
         }
 
-        // CanWork is probably inlined. Replace with original method body.
+        // CanWork is probably inlined here. Replace with original method body.
         [HarmonyPatch(typeof(Packager), "UpdateBehaviour")]
         [HarmonyPrefix]
         public static bool PackagerUpdateBehaviourPrefix(Packager __instance)
@@ -524,10 +529,9 @@ namespace LateShift
 
             // GetTransitRouteReady uses an out parameter. Changes to out parameters are captured in
             // the args array, so keep a handle to it and copy the value back out after.
-            ItemInstance itemInstance = null;
-            object[] args = new object[1] { itemInstance };
+            object[] args = new object[1] { null };
             AdvancedTransitRoute transitRouteReady = Utils.CallMethod<Packager,AdvancedTransitRoute>("GetTransitRouteReady", __instance, args);
-            itemInstance = Utils.CastTo<ItemInstance>(args[0]);
+            ItemInstance itemInstance = Utils.CastTo<ItemInstance>(args[0]);
             if (transitRouteReady != null)
             {
                 __instance.MoveItemBehaviour.Initialize(transitRouteReady, itemInstance, itemInstance.Quantity, false);
