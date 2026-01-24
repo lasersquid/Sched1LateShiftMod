@@ -2,7 +2,7 @@
 
 
 
-[assembly: MelonInfo(typeof(LateShift.LateShiftMod), "LateShift", "1.0.6", "lasersquid", null)]
+[assembly: MelonInfo(typeof(LateShift.LateShiftMod), "LateShift", "1.0.7", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace LateShift
@@ -15,7 +15,7 @@ namespace LateShift
         public override void OnInitializeMelon()
         { 
             CreateMelonPreferences();
-            Utils.SetMod(this);
+            Utils.Initialize(this);
             LoggerInstance.Msg("Initialized.");
         }
 
