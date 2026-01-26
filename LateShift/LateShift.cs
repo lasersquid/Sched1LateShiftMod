@@ -16,9 +16,13 @@ using ScheduleOne.Money;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.ObjectScripts;
 using ScheduleOne.StationFramework;
+using BehaviourList = System.Collections.Generic.List<ScheduleOne.NPCs.Behaviour.Behaviour>;
 using WorkIssuesList = System.Collections.Generic.List<ScheduleOne.Employees.Employee.NoWorkReason>;
+using GrowContainerList = System.Collections.Generic.List<ScheduleOne.Growing.GrowContainer>;
 using MushroomBedList = System.Collections.Generic.List<ScheduleOne.ObjectScripts.MushroomBed>;
+using DryingRackList = System.Collections.Generic.List<ScheduleOne.ObjectScripts.DryingRack>;
 using PotList = System.Collections.Generic.List<ScheduleOne.ObjectScripts.Pot>;
+using SpawnStationList = System.Collections.Generic.List<ScheduleOne.StationFramework.MushroomSpawnStation>;
 using Il2CppObject = System.Object;
 using Console = ScheduleOne.Console;
 #else
@@ -36,9 +40,13 @@ using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.ObjectScripts;
 using Il2CppScheduleOne.StationFramework;
+using BehaviourList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.NPCs.Behaviour.Behaviour>;
 using MushroomBedList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ObjectScripts.MushroomBed>;
 using PotList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ObjectScripts.Pot>;
 using WorkIssuesList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Employees.Employee.NoWorkReason>;
+using GrowContainerList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Growing.GrowContainer>;
+using DryingRackList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ObjectScripts.DryingRack>;
+using SpawnStationList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.StationFramework.MushroomSpawnStation>;
 using Il2CppObject = Il2CppSystem.Object;
 using Console = Il2CppScheduleOne.Console;
 #endif
@@ -550,10 +558,10 @@ namespace LateShift
             bool hasHome = __instance.GetHome() != null;
 
             // catch cases: canwork, and either of isendofday but employeesalwayswork; or gethome==null but workWithoutBeds
-            if (__instance.CanWork() && (isEndOfDay && employeesAlwaysWork || !hasHome && workWithoutBeds))
+            if ((bool)Utils.CallMethod<Botanist>("CanWork", __instance) && (isEndOfDay && employeesAlwaysWork || !hasHome && workWithoutBeds))
             {
                 // Bail if we're already working.
-                if (__instance._workBehaviours.Exists(Utils.ToPredicate((Behaviour b) => b.Active)))
+                if (Utils.GetField<Botanist, BehaviourList>("_workBehaviours", __instance).Exists(Utils.ToPredicate((Behaviour b) => b.Active)))
                 {
                     return;
                 }
@@ -571,7 +579,8 @@ namespace LateShift
                 }
 
                 // Vanilla behaviour selection
-                if (__instance.configuration.Assigns.SelectedObjects.Count == 0)
+                BotanistConfiguration configuration = Utils.GetProperty<Botanist, BotanistConfiguration>("configuration", __instance);
+                if (configuration.Assigns.SelectedObjects.Count == 0)
                 {
                     __instance.SubmitNoWorkReason("I haven't been assigned anything", "You can use your management clipboards to assign me pots, growing racks, etc.", 0);
                     __instance.SetIdle(true);
@@ -583,38 +592,40 @@ namespace LateShift
                     return;
                 }
 
-                Pot potForWatering = __instance.GetPotForWatering(0.2f);
+                Pot potForWatering = Utils.CallMethod<Botanist, Pot>("GetPotForWatering", __instance, [0.2f]);
                 if (potForWatering != null)
                 {
-                    __instance._waterPotBehaviour.AssignAndEnable(potForWatering);
+                    Utils.GetField<Botanist, WaterPotBehaviour>("_waterPotBehaviour", __instance).AssignAndEnable(potForWatering);
                     return;
                 }
 
-                MushroomBed mushroomBedForMisting = __instance.GetMushroomBedForMisting(0.2f);
+                MushroomBed mushroomBedForMisting = Utils.CallMethod<Botanist, MushroomBed>("GetMushroomBedForMisting", __instance, [0.2f]);
                 if (mushroomBedForMisting != null)
                 {
-                    __instance._mistMushroomBedBehaviour.AssignAndEnable(mushroomBedForMisting);
+                    Utils.GetField<Botanist, MistMushroomBedBehaviour>("_mistMushroomBedBehaviour", __instance).AssignAndEnable(mushroomBedForMisting);
                     return;
                 }
 
-                foreach (GrowContainer growContainer in __instance.GetGrowContainersForAdditives())
+                foreach (GrowContainer growContainer in Utils.CallMethod<Botanist, GrowContainerList>("GetGrowContainersForAdditives", __instance))
                 {
-                    if (growContainer != null && __instance._applyAdditiveToGrowContainerBehaviour.DoesBotanistHaveAccessToRequiredSupplies(growContainer))
+                    ApplyAdditiveToGrowContainerBehaviour behaviour = Utils.GetField<Botanist, ApplyAdditiveToGrowContainerBehaviour>("_applyAdditiveToGrowContainerBehaviour", __instance);
+                    if (growContainer != null && behaviour.DoesBotanistHaveAccessToRequiredSupplies(growContainer))
                     {
-                        __instance._applyAdditiveToGrowContainerBehaviour.AssignAndEnable(growContainer);
+                        behaviour.AssignAndEnable(growContainer);
                         return;
                     }
                 }
                 
-                foreach (GrowContainer growContainer2 in __instance.GetGrowContainersForSoilPour())
+                foreach (GrowContainer growContainer2 in Utils.CallMethod<Botanist, GrowContainerList>("GetGrowContainersForSoilPour", __instance))
                 {
-                    if (__instance._addSoilToGrowContainerBehaviour.DoesBotanistHaveAccessToRequiredSupplies(growContainer2))
+                    AddSoilToGrowContainerBehaviour behaviour = Utils.GetField<Botanist, AddSoilToGrowContainerBehaviour>("_addSoilToGrowContainerBehaviour", __instance);
+                    if (behaviour.DoesBotanistHaveAccessToRequiredSupplies(growContainer2))
                     {
-                        __instance._addSoilToGrowContainerBehaviour.AssignAndEnable(growContainer2);
+                        behaviour.AssignAndEnable(growContainer2);
                         return;
                     }
                     string text = "Make sure there's soil in my supplies stash.";
-                    if (__instance.configuration.Supplies.SelectedObject == null)
+                    if (configuration.Supplies.SelectedObject == null)
                     {
                         text = "Use your management clipboard to assign a supplies stash to me, then make sure there's soil in it.";
                     }
@@ -622,96 +633,100 @@ namespace LateShift
                 }
                 
                 bool flag = false;
-                foreach (Pot pot in __instance.GetPotsReadyForSeed())
+                foreach (Pot pot in Utils.CallMethod<Botanist, PotList>("GetPotsReadyForSeed", __instance))
                 {
-                    if (!__instance._sowSeedInPotBehaviour.DoesBotanistHaveAccessToRequiredSupplies(pot))
+                    SowSeedInPotBehaviour behaviour = Utils.GetField<Botanist, SowSeedInPotBehaviour>("_sowSeedInPotBehaviour", __instance);
+                    if (!behaviour.DoesBotanistHaveAccessToRequiredSupplies(pot))
                     {
                         if (!flag)
                         {
                             flag = true;
                             string text2 = "Make sure I have the right seeds in my supplies stash.";
-                            if (__instance.configuration.Supplies.SelectedObject == null)
+                            if (configuration.Supplies.SelectedObject == null)
                             {
                                 text2 = "Use your management clipboards to assign a supplies stash to me, and make sure it contains the right seeds.";
                             }
                             __instance.SubmitNoWorkReason("There is a pot ready for sowing, but I don't have any seeds for it.", text2, 1);
                         }
                     }
-                    else if (__instance.IsEntityAccessible(Utils.ToInterface<ITransitEntity>(pot)))
+                    else if ((bool)Utils.CallMethod<Botanist>("IsEntityAccessible", __instance, [Utils.ToInterface<ITransitEntity>(pot)]))
                     {
-                        __instance._sowSeedInPotBehaviour.AssignAndEnable(pot);
+                        behaviour.AssignAndEnable(pot);
                         return;
                     }
                 }
                 
                 flag = false;
-                foreach (MushroomBed mushroomBed in __instance.GetBedsReadyForSpawn())
+                foreach (MushroomBed mushroomBed in Utils.CallMethod<Botanist, MushroomBedList>("GetBedsReadyForSpawn", __instance))
                 {
-                    if (!__instance._applySpawnToMushroomBedBehaviour.DoesBotanistHaveAccessToRequiredSupplies(mushroomBed))
+                    ApplySpawnToMushroomBedBehaviour behaviour = Utils.GetField<Botanist, ApplySpawnToMushroomBedBehaviour>("_applySpawnToMushroomBedBehaviour", __instance);
+                    if (!behaviour.DoesBotanistHaveAccessToRequiredSupplies(mushroomBed))
                     {
                         if (!flag)
                         {
                             flag = true;
                             string text3 = "Make sure I have shroom spawn my supplies stash.";
-                            if (__instance.configuration.Supplies.SelectedObject == null)
+                            if (configuration.Supplies.SelectedObject == null)
                             {
                                 text3 = "Use your management clipboards to assign a supplies stash to me, and make sure it contains shroom spawn.";
                             }
                             __instance.SubmitNoWorkReason("I don't have any shroom spawn to mix into my assigned mushroom beds.", text3, 1);
                         }
                     }
-                    else if (__instance.IsEntityAccessible(Utils.ToInterface<ITransitEntity>(mushroomBed)))
+                    else if ((bool)Utils.CallMethod<Botanist>("IsEntityAccessible", __instance, [Utils.ToInterface<ITransitEntity>(mushroomBed)]))
                     {
-                        __instance._applySpawnToMushroomBedBehaviour.AssignAndEnable(mushroomBed);
+                        behaviour.AssignAndEnable(mushroomBed);
                         return;
                     }
                 }
                 
-                PotList potsForHarvest = __instance.GetPotsForHarvest();
+                PotList potsForHarvest = Utils.CallMethod<Botanist, PotList>("GetPotsForHarvest", __instance);
                 if (potsForHarvest != null && potsForHarvest.Count > 0)
                 {
-                    __instance._harvestPotBehaviour.AssignAndEnable(potsForHarvest[0]);
+                    Utils.GetField<Botanist, HarvestPotBehaviour>("_harvestPotBehaviour", __instance).AssignAndEnable(potsForHarvest[0]);
                     return;
                 }
                 
-                MushroomBedList mushroomBedsForHarvest = __instance.GetMushroomBedsForHarvest();
+                MushroomBedList mushroomBedsForHarvest = Utils.CallMethod<Botanist, MushroomBedList>("GetMushroomBedsForHarvest", __instance);
                 if (mushroomBedsForHarvest != null && mushroomBedsForHarvest.Count > 0)
                 {
-                    __instance._harvestMushroomBedBehaviour.AssignAndEnable(mushroomBedsForHarvest[0]);
+                    Utils.GetField<Botanist, HarvestMushroomBedBehaviour>("_harvestMushroomBedBehaviour", __instance).AssignAndEnable(mushroomBedsForHarvest[0]);
                     return;
                 }
                 
-                foreach (DryingRack dryingRack in __instance.GetRacksToStop())
+                foreach (DryingRack dryingRack in Utils.CallMethod<Botanist, DryingRackList>("GetRacksToStop", __instance))
                 {
-                    if (__instance.IsEntityAccessible(Utils.ToInterface<ITransitEntity>(dryingRack)))
+                    if ((bool)Utils.CallMethod<Botanist>("IsEntityAccessible", __instance, [Utils.ToInterface<ITransitEntity>(dryingRack)]))
                     {
-                        __instance.StopDryingRack(dryingRack);
+                        Utils.CallMethod<Botanist>("StopDryingRack", __instance, [dryingRack]);
                         return;
                     }
                 }
                 
-                foreach (DryingRack dryingRack2 in __instance.GetRacksReadyToMove())
+                foreach (DryingRack dryingRack2 in Utils.CallMethod<Botanist, DryingRackList>("GetRacksReadyToMove", __instance))
                 {
-                    if (__instance.IsEntityAccessible(Utils.ToInterface<ITransitEntity>(dryingRack2)))                    {
+                    if ((bool)Utils.CallMethod<Botanist>("IsEntityAccessible", __instance, [Utils.ToInterface<ITransitEntity>(dryingRack2)]))
+                    {
                         __instance.MoveItemBehaviour.Initialize(Utils.CastTo<DryingRackConfiguration>(dryingRack2.Configuration).DestinationRoute, dryingRack2.OutputSlot.ItemInstance, -1, false);
                         __instance.MoveItemBehaviour.Enable_Networked();
                         return;
                     }
                 }
                 
-                foreach (MushroomSpawnStation mushroomSpawnStation in __instance.GetSpawnStationsReadyToUse())
+                foreach (MushroomSpawnStation mushroomSpawnStation in Utils.CallMethod<Botanist, SpawnStationList>("GetSpawnStationsReadyToUse", __instance))
                 {
-                    if (__instance.IsEntityAccessible(Utils.ToInterface<ITransitEntity>(mushroomSpawnStation)))
+                    if ((bool)Utils.CallMethod<Botanist>("IsEntityAccessible", __instance, [Utils.ToInterface<ITransitEntity>(mushroomSpawnStation)]))
                     {
-                        __instance._useSpawnStationBehaviour.AssignStation(mushroomSpawnStation);
-                        __instance._useSpawnStationBehaviour.Enable_Networked();
+                        UseSpawnStationBehaviour behaviour = Utils.GetField<Botanist, UseSpawnStationBehaviour>("_useSpawnStationBehaviour", __instance);
+                        behaviour.AssignStation(mushroomSpawnStation);
+                        behaviour.Enable_Networked();
                         return;
                     }
                 }
                 
-                foreach (MushroomSpawnStation mushroomSpawnStation2 in __instance.GetSpawnStationsReadyToMove())
+                foreach (MushroomSpawnStation mushroomSpawnStation2 in Utils.CallMethod<Botanist, SpawnStationList>("GetSpawnStationsReadyToMove", __instance))
                 {
-                    if (__instance.IsEntityAccessible(Utils.ToInterface<ITransitEntity>(mushroomSpawnStation2)))
+                    if ((bool)Utils.CallMethod<Botanist>("IsEntityAccessible", __instance, [Utils.ToInterface<ITransitEntity>(mushroomSpawnStation2)]))
                     {
                         __instance.MoveItemBehaviour.Initialize((mushroomSpawnStation2.Configuration as SpawnStationConfiguration).DestinationRoute, mushroomSpawnStation2.OutputSlot.ItemInstance, -1, false);
                         __instance.MoveItemBehaviour.Enable_Networked();
@@ -719,26 +734,31 @@ namespace LateShift
                     }
                 }
                 
-                Pot potForWatering2 = __instance.GetPotForWatering(0.3f);
+                Pot potForWatering2 = Utils.CallMethod<Botanist, Pot>("GetPotForWatering", __instance, [0.3f]);
                 if (potForWatering2 != null)
                 {
-                    __instance._waterPotBehaviour.AssignAndEnable(potForWatering2);
+                    Utils.GetField<Botanist, WaterPotBehaviour>("_waterPotBehaviour", __instance).AssignAndEnable(potForWatering2);
                     return;
                 }
                 
-                MushroomBed mushroomBedForMisting2 = __instance.GetMushroomBedForMisting(0.3f);
+                MushroomBed mushroomBedForMisting2 = Utils.CallMethod<Botanist, MushroomBed>("GetMushroomBedForMisting", __instance, [0.3f]);
                 if (mushroomBedForMisting2 != null)
                 {
-                    __instance._mistMushroomBedBehaviour.AssignAndEnable(mushroomBedForMisting2);
+                    Utils.GetField<Botanist, MistMushroomBedBehaviour>("_mistMushroomBedBehaviour", __instance).AssignAndEnable(mushroomBedForMisting2);
                     return;
                 }
                 
                 QualityItemInstance qualityItemInstance;
                 DryingRack dryingRack3;
                 int num;
-                if (__instance.CanMoveDryableToRack(out qualityItemInstance, out dryingRack3, out num))
+                object[] args = new object[3] { null, null, 0 };
+                if ((bool)Utils.CallMethod<Botanist>("CanMoveDryableToRack", __instance, args))
                 {
-                    TransitRoute transitRoute = new TransitRoute(Utils.ToInterface<ITransitEntity>(__instance.configuration.Supplies.SelectedObject), Utils.ToInterface<ITransitEntity>(dryingRack3));
+                    qualityItemInstance = (QualityItemInstance)args[0];
+                    dryingRack3 = (DryingRack)args[1];
+                    num = (int)args[2];
+
+                    TransitRoute transitRoute = new TransitRoute(Utils.ToInterface<ITransitEntity>(configuration.Supplies.SelectedObject), Utils.ToInterface<ITransitEntity>(dryingRack3));
                     if (__instance.MoveItemBehaviour.IsTransitRouteValid(transitRoute, qualityItemInstance.ID))
                     {
                         __instance.MoveItemBehaviour.Initialize(transitRoute, qualityItemInstance, num, false);
@@ -755,11 +775,11 @@ namespace LateShift
                     }
                 }
                 
-                foreach (DryingRack dryingRack4 in __instance.GetRacksToStart())
+                foreach (DryingRack dryingRack4 in Utils.CallMethod<Botanist, DryingRackList>("GetRacksToStart", __instance))
                 {
-                    if (__instance.IsEntityAccessible(Utils.ToInterface<ITransitEntity>(dryingRack4)))
+                    if ((bool)Utils.CallMethod<Botanist>("IsEntityAccessible", __instance, [Utils.ToInterface<ITransitEntity>(dryingRack4)]))
                     {
-                        __instance.StartDryingRack(dryingRack4);
+                        Utils.CallMethod<Botanist>("StartDryingRack", __instance, [dryingRack4]);
                         return;
                     }
                 }
@@ -780,7 +800,7 @@ namespace LateShift
             bool hasHome = __instance.GetHome() != null;
 
             // catch cases: canwork, and either of isendofday but employeesalwayswork; or gethome==null but noBeds            
-            if (__instance.CanWork() && (isEndOfDay && employeesAlwaysWork || !hasHome && workWithoutBeds))
+            if ((bool)Utils.CallMethod<Packager>("CanWork", __instance) && (isEndOfDay && employeesAlwaysWork || !hasHome && workWithoutBeds))
             {
                 // Bail if we're currently working, or got fired.
                 if (__instance.PackagingBehaviour.Active ||  __instance.MoveItemBehaviour.Active || __instance.Fired)
@@ -863,10 +883,10 @@ namespace LateShift
             bool hasHome = __instance.GetHome() != null;
 
             // catch cases: canwork, and either of isendofday but employeesalwayswork; or gethome==null but noBeds            
-            if (__instance.CanWork() && (isEndOfDay && employeesAlwaysWork || !hasHome && workWithoutBeds))
+            if ((bool)Utils.CallMethod<Chemist>("CanWork", __instance) && (isEndOfDay && employeesAlwaysWork || !hasHome && workWithoutBeds))
             {
                 // Bail if we're currently working, or got fired, or we aren't the server.
-                if (__instance.AnyWorkInProgress() || __instance.Fired || !InstanceFinder.IsServer)
+                if ((bool)Utils.CallMethod<Chemist>("AnyWorkInProgress", __instance) || __instance.Fired || !InstanceFinder.IsServer)
                 {
                     return;
                 }
@@ -878,7 +898,7 @@ namespace LateShift
                 }
 
                 // Vanilla behaviour selection
-                if (__instance.configuration.TotalStations == 0)
+                if (Utils.GetProperty<Chemist, ChemistConfiguration>("configuration", __instance).TotalStations == 0)
                 {
                     __instance.SubmitNoWorkReason("I haven't been assigned any stations", "You can use your management clipboards to assign stations to me.", 0);
                     __instance.SetIdle(true);
@@ -886,7 +906,7 @@ namespace LateShift
                 }
                 if (InstanceFinder.IsServer)
                 {
-                    __instance.TryStartNewTask();
+                    Utils.CallMethod<Chemist>("TryStartNewTask", __instance);
                 }
             }
         }
@@ -901,10 +921,10 @@ namespace LateShift
             bool hasHome = __instance.GetHome() != null;
 
             // catch cases: canwork, and either of isendofday but employeesalwayswork; or gethome==null but noBeds            
-            if (__instance.CanWork() && (isEndOfDay && employeesAlwaysWork || !hasHome && workWithoutBeds))
+            if ((bool)Utils.CallMethod<Cleaner>("CanWork", __instance) && (isEndOfDay && employeesAlwaysWork || !hasHome && workWithoutBeds))
             {
                 // Bail if we're currently working, or got fired.
-                if (__instance.AnyWorkInProgress() || __instance.Fired)
+                if ((bool)Utils.CallMethod<Cleaner>("AnyWorkInProgress", __instance) || __instance.Fired)
                 {
                     return;
                 }
@@ -916,7 +936,7 @@ namespace LateShift
                 }
 
                 // Vanilla behaviour selection
-                if (__instance.configuration.binItems.Count == 0)
+                if (Utils.GetProperty<Cleaner, CleanerConfiguration>("configuration", __instance).binItems.Count == 0)
                 {
                     __instance.SubmitNoWorkReason("I haven't been assigned any trash cans", "You can use your management clipboards to assign trash cans to me.", 0);
                     __instance.SetIdle(true);
@@ -926,7 +946,7 @@ namespace LateShift
                 {
                     return;
                 }
-                __instance.TryStartNewTask();
+                Utils.CallMethod<Cleaner>("TryStartNewTask", __instance);
             }
         }
     }
