@@ -379,7 +379,7 @@ namespace LateShift
                 if (moneyManager.onlineBalance >= __instance.DailyWage)
                 {
                     // Record employee pay as a debit from the online balance.
-                    moneyManager.CreateOnlineTransaction("Employee Pay", -__instance.DailyWage, 1f, $"{__instance.fullName}, employeetype, location");
+                    moneyManager.CreateOnlineTransaction("Employee Pay", -__instance.DailyWage, 1f, $"{__instance.FullName}, employeetype, location");
                 }
             }
             else
@@ -420,7 +420,7 @@ namespace LateShift
 
         [HarmonyPatch(typeof(Employee), "GetWorkIssue")]
         [HarmonyPrefix]
-        public static bool GetWorkIssuePrefix(Employee __instance, ref bool __result, ref DialogueContainer notWorkingReason)
+        public static bool GetWorkIssuePrefix(Employee __instance, ref bool __result, ref Conversation notWorkingReason)
         {
             if (__instance.GetHome() == null && !Utils.GetMelonPrefEntry<bool>("workWithoutBeds"))
             {
@@ -438,7 +438,7 @@ namespace LateShift
             WorkIssuesList workIssues = Utils.GetField<Employee, WorkIssuesList>("WorkIssues", __instance);
             if (__instance.TicksSinceLastWork >= 5 && workIssues.Count > 0)
             {
-                notWorkingReason = UnityEngine.Object.Instantiate<DialogueContainer>(__instance.WorkIssueDialogueTemplate);
+                notWorkingReason = UnityEngine.Object.Instantiate<Conversation>(__instance.WorkIssueDialogueTemplate);
                 notWorkingReason.GetDialogueNodeByLabel("ENTRY").DialogueText = workIssues[0].Reason;
                 if (!string.IsNullOrEmpty(workIssues[0].Fix))
                 {
