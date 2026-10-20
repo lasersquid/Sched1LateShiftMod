@@ -485,6 +485,32 @@ namespace LateShift
                 __result = true;
             }
         }
+
+        [HarmonyPatch(typeof(Employee), "CanConsumeProduct")]
+        [HarmonyPrefix]
+        public static bool CanConsumeProductPrefix(Employee __instance, ref bool __result)
+        {
+            bool workWithoutBeds = Utils.GetMelonPrefEntry<bool>("workWithoutBeds");
+
+            // Preserve vanilla behaviour unless the bed requirement is the one
+            // this preference is intended to relax.
+            if (__instance.GetHome() != null || !workWithoutBeds)
+            {
+                return true;
+            }
+
+            // Mirror every vanilla eligibility check except GetHome().
+            __result = !__instance.Fired
+                && __instance.PaidForToday
+                && !NetworkSingleton<TimeManager>.Instance.IsEndOfDay
+                && !__instance.Behaviour.ConsumeProductBehaviour.Enabled
+                && !__instance.Behaviour.ConsumeProductBehaviour.IsAnyProductActive
+                && !(bool)Utils.CallMethod<Employee>("IsAnyWorkInProgress", __instance)
+                && !__instance.Behaviour.GenericDialogueBehaviour.Enabled
+                && !__instance.Behaviour.FaceTargetBehaviour.Enabled;
+
+            return false;
+        }
         
         [HarmonyPatch(typeof(Employee), "UpdateBehaviour")]
         [HarmonyPrefix]
@@ -525,6 +551,13 @@ namespace LateShift
                         flag = true;
                         __instance.SubmitNoWorkReason("I haven't been paid yet", "You can place cash in my locker.", 0);
                     }
+                }
+
+                // Vanilla UpdateBehaviour performs this update on the server.
+                // Since the bedless path skips vanilla, preserve the update here.
+                if (InstanceFinder.IsServer)
+                {
+                    Utils.CallMethod<Employee>("UpdateConsumeProduct", __instance);
                 }
 
                 if (flag)
